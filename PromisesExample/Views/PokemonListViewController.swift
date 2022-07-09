@@ -1,16 +1,10 @@
 import UIKit
 
-class PokemonListViewController: UIViewController {
+class PokemonListViewController: UITableViewController {
     
-    // MARK: - Views / Outlets
-    @IBOutlet private var tableView: UITableView!
     private let loadingIndicator = UIActivityIndicatorView(style: .large)
-    
-    // MARK: - Properties
     private let api: PokemonApi = PokemonApiImpl()
-    private var pokemon: [PokemonQuery] = []
-    
-    // MARK: - Lifecycle
+    private var pokemon: [PokemonApiLink] = []
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -27,8 +21,8 @@ class PokemonListViewController: UIViewController {
                 self.pokemon = response.results
                 self.tableView.reloadData()
             }
-            .catch(on: .main) { [weak self] _ in
-                self?.showErrorAlert()
+            .catch(on: .main) { error in
+                debugPrint(error)
             }
             .always(on: .main) { [weak self] in
                 self?.hideLoadingIndicator()
@@ -37,6 +31,7 @@ class PokemonListViewController: UIViewController {
     
     private func showLoadingIndicator() {
         view.addSubview(loadingIndicator)
+        loadingIndicator.center = view.center
         loadingIndicator.startAnimating()
     }
     
@@ -45,21 +40,13 @@ class PokemonListViewController: UIViewController {
         loadingIndicator.removeFromSuperview()
     }
     
-    private func showErrorAlert() {
-        let alert = UIAlertController(title: "Error", message: "An error occurred", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
-    }
-}
-
-
-extension PokemonListViewController: UITableViewDataSource, UITableViewDelegate {
+    // MARK: - UITableView
     
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         pokemon.count
     }
     
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let pokemon = pokemon[indexPath.row]
         let cell = tableView.dequeueReusableCell(withIdentifier: "pokemon", for: indexPath)
         var config = cell.defaultContentConfiguration()
@@ -68,7 +55,32 @@ extension PokemonListViewController: UITableViewDataSource, UITableViewDelegate 
         return cell
     }
     
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        showLoadingIndicator()
+        api.fetchDetails(for: pokemon[indexPath.row])
+            .then(on: .main) { [weak self] details in
+                self?.performSegue(withIdentifier: "details", sender: details)
+            }
+            .catch(on: .main) { error in
+                debugPrint(error)
+            }
+            .always(on: .main) { [weak self] in
+                self?.hideLoadingIndicator()
+            }
+    }
+    
+    // MARK: - Segue
+    
+    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
+        super.prepare(for: segue, sender: sender)
+        switch segue.destination {
+        case let viewController as PokemonDetailsViewController:
+            viewController.details = (sender as! PokemonDetails)
+        default:
+            return
+        }
     }
 }
+
+
